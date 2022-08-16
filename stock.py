@@ -119,6 +119,8 @@ def make_window(feature, label, window_size):
         feature_list.append(feature[i : i+window_size])
         label_list.append(label[i+window_size])
     return torch.FloatTensor(np.array(feature_list)) , torch.FloatTensor(np.array(label_list))
+
+
 class stock_pre(nn.Module):
     def __init__(self,num_classes,input_size, hidden_size, num_layers, seq_length):
         super(stock_pre, self).__init__() # super().__init__
@@ -130,7 +132,7 @@ class stock_pre(nn.Module):
 
         self.lstm = nn.LSTM(input_size = input_size, hidden_size= hidden_size, num_layers= num_layers, batch_first= True)
             #1st layer
-        self.fc = nn.Sequential(nn.Linear(hidden_size*seq_length, 1), nn.Tanh()) #matrix multiple. inputsize = layer 입력크기, 64 = layer 출력 크기.(히든 노드 갯수)
+        self.fc = nn.Sequential(nn.Linear(hidden_size*seq_length, num_classes) ) #matrix multiple. inputsize = layer 입력크기, 64 = layer 출력 크기.(히든 노드 갯수)
         # self.layer2 = nn.Linear(256, 256)
         # self.layer3 = nn.Linear(256, 128)
         # self.layout = nn.Linear(128, num_classes)
@@ -139,7 +141,7 @@ class stock_pre(nn.Module):
     def forward(self, x): # 28*28 영상이 64개! 병렬성 증가.
         h_0 = torch.zeros(self.num_layers, x.size()[0], self.hidden_size).to(DEVICE)
         c_0 = torch.zeros(self.num_layers, x.size()[0], self.hidden_size).to(DEVICE)
-        output, _ = self.lstm(x, (h_0,c_0))
+        output, _ = self.lstm(x, (h_0, c_0))
 
         #hn = hn.view(-1, self.hidden_size)
         output = output.reshape(output.shape[0], -1)
@@ -159,7 +161,7 @@ class stock_pre(nn.Module):
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("DEVICE = {}".format(DEVICE))
 
-window_size = 10
+window_size = 5
 x, y = make_window(x, y, window_size)
 split = int(len(x)*0.7)
 
@@ -179,7 +181,7 @@ print(train_x.shape)
 dataset = TensorDataset(train_x, train_y)
 testset = TensorDataset(test_x, test_y)
 dataloader = DataLoader(dataset, batch_size= 20, shuffle= True)
-testloader = DataLoader(testset, batch_size= 20, shuffle= False)
+testloader = DataLoader(testset, batch_size= 100, shuffle= False)
 
 input_size = x.size(2)
 hidden_size = 8
@@ -188,8 +190,8 @@ num_classes = y.size(1)
 
 LSTM = stock_pre(num_classes, input_size, hidden_size, num_layers, window_size).to(DEVICE)
 criterion = nn.MSELoss()
-optimizer = optim.Adam(LSTM.parameters(), lr=1e-3)  # 요즘엔 adam을 많이 쓰기도 함.
-#optimizer = optim.SGD(LSTM.parameters(), lr=1e-3, momentum=0.9)  # 요즘엔 adam을 많이 쓰기도 함.
+#optimizer = optim.Adam(LSTM.parameters(), lr=1e-3)  # 요즘엔 adam을 많이 쓰기도 함.
+optimizer = optim.SGD(LSTM.parameters(), lr=1e-3, momentum=0.9)  # 요즘엔 adam을 많이 쓰기도 함.
 loss_stack = []
 
 start = time.time()
@@ -203,10 +205,10 @@ for epoch in range(10000):
         loss.backward()
         optimizer.step()
         running_loss += loss
-        if i == 0:
-            print('[Epoch %d, step = %5d] loss:%.3f, time = ' % (epoch + 1, i + 1, running_loss), timesin(start))
-            loss_stack.append(running_loss)
-            running_loss = 0.0
+    if epoch % 100 == 0:
+        print('[Epoch %d, step = %5d] loss:%.3f, time = ' % (epoch + 1, i + 1, running_loss), timesin(start))
+        loss_stack.append(running_loss)
+        running_loss = 0.0
 print(timesin(start))
 
 #import matplotlib.ticker as ticker
